@@ -20,6 +20,9 @@ Version  dd/mm/aa  Autor     Proposito de la edicion
 
 
 #include "Socket.hpp"
+#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
 
 
 /*
@@ -143,6 +146,43 @@ int Escribe_Socket (int fd, char *Datos, int Longitud)
 	*/
 	return Escrito;
 }
+
+
+int Connection::SendText(const char* text, int text_len, int fildes)
+{
+	// fprintf(stderr,"Mandando archivo %s por conexion %d",filename,fildes);
+	int longitud=text_len;
+	int result=0,aux=0,tamanio=0;
+
+	SizeFile file;
+
+	snprintf(file.size,sizeof(SizeFile),"%d", text_len);
+
+	if(write(fildes,&file.size,sizeof(SizeFile))<0){
+		printf("\tError sending the file size\n");
+		return -1;
+	}
+
+	result=0;
+	while(result<text_len){
+		aux=write(fildes,text+result,text_len-result);
+		
+		if(aux>0){//Se ha conseguido escribir algo
+			result+=aux;
+		}else{
+			if(aux==0){//Se ha acabado de escribir
+			//return result;
+			}else{//Error
+				printf("Error sendint the content\n");
+				return -1;
+			}
+		}
+		//El ultimo tramo puede ser menos de 1024
+	}
+
+	return 0;
+}
+
 
 /*
  *  filename -> nombre del fichero a mandar
@@ -278,12 +318,103 @@ int Connection::ReceiveFile(const char * filename, int fildes)
 			
 			tamanio-=longitud;
 			
-		}fclose(fd);
+		}
+		fclose(fd);
 	}
 	delete(buff);
 	return 0;
 }
 
+
+
+
+
+
+int Connection::ReceiveAudio(char **output_file, int *output_file_len, int fildes)
+{
+	//fprintf(stderr,"Recibiendo archivo\n");
+	
+	int longitud=1024;
+	int cur_out_size = 0;
+	int leido=0,aux=0,tamanio=0,leido_total=0;
+	char *buff=new char[longitud];
+	
+	//Obtener el tamaño del archivo 
+	SizeFile file;
+	aux=read(fildes,file.size,sizeof(SizeFile));
+	//fprintf(stderr,"Recibiendo tamanio archivo %s\n", file.size);
+	if(aux==-1){
+		printf("Error receiving the file size\n");
+		return -1;
+	}
+	/*else{
+		printf("Recibido el tamanio del archivo");
+	}*/
+	sscanf(file.size,"%d",&tamanio);
+	//fprintf(stderr,"%d\n",tamanio);
+	//int i=0;
+	// FILE* fd=NULL;
+	// fd=fopen(filename,"wb");
+	// if(fd!=NULL){
+	//Como saber hasta donde leer
+			std::cout << "Start" << std::endl;
+		while(tamanio>0){
+			if(tamanio<longitud){longitud=tamanio;}
+			
+			leido=0;
+			while (leido < longitud)
+			{
+				//printf("Iteracion %d\n",++i);
+				aux = read (fildes, buff + leido, longitud - leido);
+				if (aux > 0){
+					leido += aux;
+				}else
+				{
+					//Si read devuelve 0, es que se ha cerrado el socket. Devolvemos
+					//los caracteres leidos hasta ese momento*/
+					if (aux == 0){ 
+						//fprintf(stderr,"Ganas de matar aumentando\n");
+						break;//return leido;
+					}
+					if (aux == -1)
+					{
+						//Posibles errores
+						switch (errno)
+						{
+							case EINTR:
+							case EAGAIN:
+								usleep (100);
+								break;
+							default:
+								return -1;
+						}
+					}
+				}
+			}
+			// fwrite(buff,1,longitud,fd);
+
+
+			
+			tamanio-=longitud;
+			printf("Before len: %d %d %d\n", cur_out_size, longitud,  *output_file_len);
+			std::cout << "Before" << std::endl;
+			if (cur_out_size + longitud >= *output_file_len) {
+				*output_file = (char*)realloc(*output_file, (*output_file_len) * 2);
+				*output_file_len *= 2;
+			}
+			printf("Output len: %d\n", cur_out_size);
+			memcpy(*output_file+cur_out_size, buff, longitud);
+			printf("After copy\n");
+			cur_out_size += longitud;
+			leido_total += leido;
+			
+		}
+		*output_file_len = leido_total;
+		// fclose(fd);
+	// }
+	delete(buff);
+	return 0;
+}
 
 
 

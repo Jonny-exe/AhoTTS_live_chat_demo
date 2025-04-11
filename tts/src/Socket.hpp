@@ -88,7 +88,9 @@ int Escribe_Socket (int fd, char *Datos, int Longitud);
 class Connection{
 public:
 	int SendFile (const char* filename, int fildes);
+	int SendText (const char* text, int text_len, int fildes);
 	int ReceiveFile(const char * filename, int fildes);
+	int ReceiveAudio(char **output_file, int *output_file_len, int fildes);
 };
 /*
 typedef struct {
