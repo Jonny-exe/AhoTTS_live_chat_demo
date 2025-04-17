@@ -11,6 +11,7 @@ type ChatMessage = {
 export default function VoiceChatbot() {
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [dotSize, setDotSize] = useState(80)
   const [volume, setVolume] = useState(0)
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([
@@ -95,6 +96,7 @@ export default function VoiceChatbot() {
   useEffect(() => {
     return () => {
       cleanupAudio()
+      setIsPlaying(false) // Reset playing state on unmount
       if (speechSynthRef.current) {
         speechSynthRef.current.cancel()
       }
@@ -324,10 +326,31 @@ export default function VoiceChatbot() {
 
       // Optionally auto-play
       const audio = new Audio(url);
-      await audio.play();
-      audio.onended = function(){
-        console.log("After play")
-        startRecording()
+      setIsPlaying(true); // Set playing state to true before playing
+
+      // Add error handler
+      audio.onerror = function(e) {
+        console.error("Audio playback error:", e);
+        setIsPlaying(false); // Reset playing state on error
+        URL.revokeObjectURL(url); // Clean up the URL object
+        // startRecording();
+      };
+
+      // Add ended handler
+      audio.onended = function() {
+        console.log("Audio playback completed");
+        setIsPlaying(false); // Set playing state to false when audio ends
+        URL.revokeObjectURL(url); // Clean up the URL object
+        // startRecording();
+      };
+
+      try {
+        await audio.play();
+      } catch (error) {
+        console.error("Error playing audio:", error);
+        setIsPlaying(false);
+        URL.revokeObjectURL(url); // Clean up the URL object
+        // startRecording();
       }
 
     } catch (error) {
@@ -433,7 +456,7 @@ export default function VoiceChatbot() {
         className="relative flex items-center justify-center cursor-pointer"
         onClick={!isProcessing ? toggleRecording : undefined}
       >
-        {/* Simple ripple effect - only show when recording */}
+        {/* Simple ripple effect - show when recording or playing */}
         {isRecording && (
           <div
             className="absolute rounded-full animate-pulse"
@@ -445,21 +468,33 @@ export default function VoiceChatbot() {
             }}
           />
         )}
+        {isPlaying && (
+          <div
+            className="absolute rounded-full animate-pulse"
+            style={{
+              width: `${dotSize * 1.4}px`,
+              height: `${dotSize * 1.4}px`,
+              animationDuration: '1.2s',
+              backgroundColor: 'rgba(0, 102, 204, 0.2)' // Blue with transparency
+            }}
+          />
+        )}
 
         {/* Main dot - larger and more minimal */}
         <div
           className={`rounded-full transition-all ${
             isProcessing ? "animate-pulse" :
             isRecording ? "animate-pulse" :
+            isPlaying ? "animate-pulse" :
             ""
           }`}
           style={{
             width: `${dotSize}px`,
             height: `${dotSize}px`,
             transition: "width 0.15s, height 0.15s, background-color 0.3s",
-            animationDuration: isRecording ? '2s' : '0s',
-            backgroundColor: isProcessing ? '#666666' : isRecording ? '#E73D44' : '#333333'
-            // Red (#E73D44) when recording, dark gray (#333333) when idle, medium gray (#666666) when processing
+            animationDuration: isPlaying ? '1s' : isRecording ? '2s' : '0s',
+            backgroundColor: isPlaying ? '#0066CC' : isProcessing ? '#666666' : isRecording ? '#E73D44' : '#333333'
+            // Blue (#0066CC) when playing, Red (#E73D44) when recording, dark gray (#333333) when idle, medium gray (#666666) when processing
           }}
         />
       </div>
@@ -468,10 +503,10 @@ export default function VoiceChatbot() {
       <div
         className="mt-3 text-sm font-medium"
         style={{
-          color: isProcessing ? '#666666' : isRecording ? '#E73D44' : '#333333'
+          color: isPlaying ? '#0066CC' : isProcessing ? '#666666' : isRecording ? '#E73D44' : '#333333'
         }}
       >
-        {isProcessing ? "Processing..." : isRecording ? "Listening..." : "Tap to speak"}
+        {isPlaying ? "Speaking..." : isProcessing ? "Processing..." : isRecording ? "Listening..." : "Tap to speak"}
       </div>
     </div>
   )
