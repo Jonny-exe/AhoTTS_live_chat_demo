@@ -271,62 +271,52 @@ export default function VoiceChatbot() {
       }
 
       const transcribedJson = await responseTranscribed.json()
+      const userMessage = transcribedJson.data[0]
 
-      const chatResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      // Send the transcribed text and conversation history to our backend
+      // The backend will handle the ChatGPT API call and return both text and audio
+      const backendResponse = await fetch("http://localhost:9000/content_receiver", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
+          "Content-Type": "text/plain",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
           messages: [
             ...conversationHistory,
             {
               role: "user",
-              content: transcribedJson.data[0]
-            },
-          ],
-        }),
+              content: userMessage
+            }
+          ]
+        })
       })
 
-      if (!chatResponse.ok) {
-        throw new Error("Failed to get AI response")
+      if (!backendResponse.ok) {
+        throw new Error(`Failed to get response from backend: ${backendResponse.status}`)
       }
 
-      const responseData = await chatResponse.json()
-      const aiText = responseData.choices[0]?.message?.content
+      // Parse the response which contains both text and base64-encoded audio
+      const responseData = await backendResponse.json()
+      const aiText = responseData.text
+      const audioBase64 = responseData.audio
 
-      console.log(aiText)
+      console.log("Received response from backend")
 
       // Update conversation history with the new messages
       setConversationHistory(prevHistory => [
         ...prevHistory,
-        { role: "user", content: transcribedJson.data[0] },
+        { role: "user", content: userMessage },
         { role: "assistant", content: aiText }
       ])
 
-
-      const responseAudio = await fetch("http://localhost:9000/content_receiver", {
-        method: "POST",
-        body: aiText,
-        headers: {
-          "Content-Type": "text/plain",
-        },
-        // mode: 'no-cors',
-      })
-      // console.log(await responseAudio.blob())
-      // const arrayBuffer2 = await responseAudio.arrayBuffer();
-      // console.log("Arraybuffer: ", arrayBuffer2)
-
-      if (!responseAudio.ok) {
-        throw new Error(`Failed to fetch: ${responseAudio.status}`);
+      // Convert the base64 audio to a blob
+      const binaryString = atob(audioBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
-
-      const arrayBuffer = await responseAudio.arrayBuffer();
-      const wavBytes = new Uint8Array(arrayBuffer);
-      const blob = new Blob([wavBytes], { type: 'audio/wav' });
-      console.log(blob)
+      const blob = new Blob([bytes], { type: 'audio/wav' });
+      console.log("Created audio blob from base64 data")
 
       // Create a URL from the Blob
       const url = URL.createObjectURL(blob);

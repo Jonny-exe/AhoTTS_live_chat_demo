@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.my_server
+    environment:
+      - OPENAI_KEY=${OPENAI_KEY}
     ports:
       - "9000:9000"
     networks:

@@ -60,7 +60,7 @@ Version  dd/mm/aa  Autor     Proposito de la edicion
 1.1.0	 03/05/12  Agustin    Implementación del tts64 version 1.2.0
 1.0.0  	 20/01/12  Agustin	  Codificación inicial
 */
-#include <Socket_Cliente.hpp>
+#include "Socket_Cliente.hpp"
 
 /*
 / Conecta con un servidor remoto a traves de socket INET
@@ -72,7 +72,7 @@ int ClientConnection::OpenInetConnection(const char *IPServidor, const int Puert
 	//struct hostent *Host;
 
 	//printf("Inicio de conexion INET\n");
-	
+
 	//Puerto = getservbyname (Servicio, "tcp");
 	//if (Puerto == NULL)
 	//	return -1;
@@ -80,12 +80,12 @@ int ClientConnection::OpenInetConnection(const char *IPServidor, const int Puert
 	//Host = gethostbyname (Host_Servidor);
 	//if (Host == NULL)
 	//	return -1;
-	
-	
+
+
 	Direccion.sin_family = AF_INET;
 	Direccion.sin_addr.s_addr = inet_addr(IPServidor);
 	Direccion.sin_port = htons(PuertoServicio);
-	
+
 	//printf("apertura de socket, contra la direccion %s == %d\n",IPServidor,inet_addr(IPServidor));
 	socket_server = socket (AF_INET, SOCK_STREAM, 0);
 
@@ -97,12 +97,12 @@ int ClientConnection::OpenInetConnection(const char *IPServidor, const int Puert
 		return -1;
 	}
 	//printf("Conexion INET establecida, descriptor %d\n",socket_server);
-	
+
 	return 0;
 }
 
 /*Envia una utt, primero calcula la longitud (que no puede ser mayor de
- * 9999 caracteres, y la envía en una estructura predefinida 
+ * 9999 caracteres, y la envía en una estructura predefinida
  * para que el servidor sepa cuantos bytes tiene que leer*/
  /*
 int ClientConnection::SendUtt(const char* str )
@@ -110,20 +110,20 @@ int ClientConnection::SendUtt(const char* str )
 	int longitud=0;
 	int result=0,aux;
 	LongUtt longcadena;
-	
+
 	longitud=strlen(str)+1;
 	//itoa(longitud,longcadena.longitud,10);
-	
+
 	snprintf(longcadena.longitud,sizeof(LongUtt),"%d",longitud);
 	//Falta comprobar que str no sea NULL
-	
+
 	//Se manda la longitud de la cadena
 	if(write(socket_server,&longcadena.longitud,sizeof(LongUtt))<0){
 		printf("Error al enviar la longitud de la utt\n");
 		return -1;
 		}else
 		{printf("Enviada la longitud\n");}
-		
+
 	while(result<longitud){
 		aux=write(socket_server,str+result,longitud-result);
 		if(aux>0){//Se ha conseguido escribir algo
@@ -141,7 +141,7 @@ int ClientConnection::SendUtt(const char* str )
 }
 */
 
-/*Envia por el socket la lengua en la que se quiere sintetizar la 
+/*Envia por el socket la lengua en la que se quiere sintetizar la
  * utterance mandada previamente
  * DEPRECATED ahora es send options*/
  /*
@@ -175,11 +175,11 @@ int ClientConnection::SendOptions()
 int ClientConnection::ReadFile(FILE* fd)
 {
 	printf("Recibiendo archivo\n");
-	
+
 	int longitud=1024;
 	int leido=0,aux=0,tamanio=0;
 	char *buff=new char[longitud];
-	
+
 	//Obtener el tamaño del archivo de audio
 	SizeFile file;
 	aux=read(socket_server,file.size,sizeof(SizeFile));
@@ -195,7 +195,7 @@ int ClientConnection::ReadFile(FILE* fd)
 	//Como saber hasta donde leer
 	while(tamanio>0){
 		if(tamanio<longitud){longitud=tamanio+1;}
-		
+
 		leido=0;
 		while (leido < longitud)
 		{
@@ -207,7 +207,7 @@ int ClientConnection::ReadFile(FILE* fd)
 			{
 				//Si read devuelve 0, es que se ha cerrado el socket. Devolvemos
 				//los caracteres leidos hasta ese momento
-				if (aux == 0){ 
+				if (aux == 0){
 					printf("Ganas de matar aumentando\n");
 					break;//return leido;
 				}
@@ -227,11 +227,11 @@ int ClientConnection::ReadFile(FILE* fd)
 			}
 		}
 		fwrite(buff,1,longitud,fd);
-		
+
 		tamanio-=longitud;
-		
+
 	}
-	
+
 	delete(buff);
 	return 0;
 }

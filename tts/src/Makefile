@@ -5,6 +5,7 @@ PREFIX ?= $(shell brew --prefix)
 
 OPENSSL_DIR = $(PREFIX)/opt/openssl@3
 OPENSSL_SUPPORT = -DCPPHTTPLIB_OPENSSL_SUPPORT -I$(OPENSSL_DIR)/include -L$(OPENSSL_DIR)/lib -lssl -lcrypto
+CURL_SUPPORT = -lcurl
 
 ifneq ($(OS), Windows_NT)
 	UNAME_S := $(shell uname -s)
@@ -20,6 +21,6 @@ BROTLI_SUPPORT = -DCPPHTTPLIB_BROTLI_SUPPORT -I$(BROTLI_DIR)/include -L$(BROTLI_
 
 all: server client hello simplecli simplesvr upload redirect ssesvr ssecli benchmark one_time_request server_and_client
 
-server : server.cc httplib.h Makefile
-	$(CXX) -o server $(CXXFLAGS) server.cc $(OPENSSL_SUPPORT) $(ZLIB_SUPPORT) $(BROTLI_SUPPORT)
+server : server.cc openai.hpp httplib.h base64.cpp base64.hpp Makefile
+	$(CXX) -o server $(CXXFLAGS) server.cc $(OPENSSL_SUPPORT) $(ZLIB_SUPPORT) $(BROTLI_SUPPORT) $(CURL_SUPPORT)
 

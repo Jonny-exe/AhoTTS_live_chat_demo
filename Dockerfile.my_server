@@ -1,5 +1,16 @@
 FROM ubuntu:latest
 WORKDIR /app
+
+ENV OPENAI_KEY=${OPENAI_KEY}
+RUN echo "OPENAI_KEY=${OPENAI_KEY}"
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    libcurl4-gnutls-dev \
+    && apt-get clean
+
 COPY ./bin/my_server /app/my_server
 EXPOSE 9000
-ENTRYPOINT ["./my_server", "-IP=0.0.0.0", "-SocketIP=172.100.0.3", "-Port=9000", "-SocketPort=9002"]
+# ENTRYPOINT ["./my_server", "-IP=0.0.0.0", "-SocketIP=172.100.0.3", "-Port=9000", "-SocketPort=9002", "-OpenAIKey=$OPENAI_KEY"]
+ENTRYPOINT sh -c "./my_server -IP=0.0.0.0 -SocketIP=172.100.0.3 -Port=9000 -SocketPort=9002 -OpenAIKey=$OPENAI_KEY"
+

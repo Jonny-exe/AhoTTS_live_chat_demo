@@ -69,20 +69,22 @@ Version  dd/mm/aa  Autor     Proposito de la edicion
 #include "strl.hpp"
 #include "string.hpp"
 #include "httplib.h"  // Include cpp-httplib header
+#include "openai.hpp"  // Include OpenAI API header
+#include "base64.hpp"  // Include base64 encoding header
 
 
 using namespace std;
 
 // HTTP
 int main(int argc, char *argv[]) {
-    KVStrList pro("InputFile=input.txt Lang=eu OutputFile=output.wav Speed=100 SocketIP=NULL IP=NULL Port=0 SocketPort=0 SetDur=n");
+    KVStrList pro("InputFile=input.txt Lang=eu OutputFile=output.wav Speed=100 SocketIP=NULL IP=NULL Port=0 SocketPort=0 SetDur=n OpenAIKey=NULL");
     StrList files;
 
     clargs2props(argc, argv, pro, files,
-            "InputFile=s Lang={es|eu} OutputFile=s Speed=s SocketIP=s IP=s Port=i SocketPort=i SetDur=b");
-    
+            "InputFile=s Lang={es|eu} OutputFile=s Speed=s SocketIP=s IP=s Port=i SocketPort=i SetDur=b OpenAIKey=s");
+
     httplib::Server svr;
-    
+
     const char *lang = pro.val("Lang");
     const char *inputfile = pro.val("InputFile");
     const char *outputfile = pro.val("OutputFile");
@@ -91,9 +93,21 @@ int main(int argc, char *argv[]) {
     const char *ip_socket=pro.val("SocketIP");
     const int puerto=pro.ival("Port");
     const int puerto_socket=pro.ival("SocketPort");
+    const char *openai_key=pro.val("OpenAIKey");
     cout << "Puerto: " << puerto << endl;
     cout << "Puerto socket: " << puerto_socket << endl;
     bool setdur=pro.bbval("SetDur");
+
+    // Initialize OpenAI API
+    if (strcmp(openai_key, "NULL") != 0) {
+        openai::start(openai_key);
+        cout << "OpenAI API initialized with provided key" << endl;
+    } else if (getenv("OPENAI_API_KEY") != NULL) {
+        openai::start();
+        cout << "OpenAI API initialized with environment variable" << endl;
+    } else {
+        fprintf(stderr, "Warning: No OpenAI API key provided. ChatGPT integration will not work.\n");
+    }
 
     if (!strcmp(ip,"NULL")){
         fprintf(stderr,"IP direction is mandatory\n");
@@ -127,7 +141,8 @@ int main(int argc, char *argv[]) {
         res.set_content("Hello World!", "text/plain");
     });
 
-    svr.Options(R"(\*)", [](const auto& req, auto& res) {
+
+    svr.Options(R"(\*)", [](const httplib::Request& req, httplib::Response& res) {
         res.set_header("Allow", "GET, POST, HEAD, OPTIONS");
     });
     svr.set_error_handler([](const httplib::Request& req, httplib::Response& res) {
@@ -154,52 +169,130 @@ int main(int argc, char *argv[]) {
         res.set_header("Access-Control-Allow-Headers", "Content-Type"); // Allow headers
         cout << "Post request! " << endl;
 
-      string body;
-      content_reader([&](const char *data, size_t data_length) {
-        body.append(data, data_length);
-        cout << "Text: " << data << endl;
+        string body;
+        content_reader([&](const char *data, size_t data_length) {
+            body.append(data, data_length);
+            cout << "Received data: " << data << endl;
 
-        ClientConnection *cliente = new ClientConnection (op);
-        
-        int aux;
-        cout << "IP socket: " << ip_socket << endl;
-        cout << "Port socket: " << puerto_socket << endl;
-        aux=cliente->OpenInetConnection(ip_socket,puerto_socket);
-        if(aux==-1)
-        {
-            fprintf(stderr,"Unable to establish server connection\n");
-            exit(-1);
-        }
+            // Send the text to ChatGPT API
+            try {
+                // Parse the input as JSON
+                openai::Json chat_request;
+                openai::Json input_json;
 
-        cliente->SendOptions();
-        fprintf(stderr,"Sending file to synthesize\n");
-        cout << "Data: "<< data << endl;
-        cout << "Length: "<< data_length << endl;
-        cliente->SendText(data, data_length, cliente->ObtainSSocket());
-        
-        
-        fprintf(stderr,"Receiving synthesized file\n");
+                try {
+                    // Try to parse the input as JSON
+                    input_json = openai::json_parse(std::string(data, data_length));
+                    cout << "Parsed input as JSON" << endl;
+                } catch (const std::exception& e) {
+                    // Return an error for invalid JSON
+                    cout << "Error: Input is not valid JSON" << endl;
+                    openai::Json error_json;
+                    error_json["error"] = "Invalid JSON input";
+                    error_json["details"] = e.what();
+                    res.set_header("Content-Type", "application/json");
+                    res.set_content(error_json.dump(), "application/json");
+                    return true;
+                }
 
-        int out_size = 1024 * 10;
-        char **outputAudio = (char**) malloc(sizeof (char**));
-        *outputAudio = (char*)malloc(out_size * sizeof(char*));
-        cout << "First malloc" << endl;
-        cliente->ReceiveAudio(outputAudio, &out_size, cliente->ObtainSSocket());
-        cout << "This is the output size of the new audio: " << out_size << endl;
-        
-        cliente->CloseConnection();
-        delete (cliente);
-        cout << "Sending" << endl;
+                // Validate that the JSON contains a messages array
+                if (!input_json.contains("messages") || !input_json["messages"].is_array() || input_json["messages"].empty()) {
+                    cout << "Error: JSON must contain a non-empty 'messages' array" << endl;
+                    openai::Json error_json;
+                    error_json["error"] = "Invalid input format";
+                    error_json["details"] = "JSON must contain a non-empty 'messages' array";
+                    res.set_header("Content-Type", "application/json");
+                    res.set_content(error_json.dump(), "application/json");
+                    return true;
+                }
 
-        res.set_header("Content-Disposition", "attachment; filename=file.txt");
-        res.set_header("Content-Type", "audio/wav");
-        res.set_header("Content-Length", std::to_string(out_size));  // Set the Content-Length header
-        res.set_content(*outputAudio, out_size, "application/octet-stream");
+                // Set up the ChatGPT request
+                chat_request["model"] = "gpt-3.5-turbo";
+                chat_request["messages"] = input_json["messages"];
 
-        return true;
-      });
+                // Copy other parameters if they exist
+                if (input_json.contains("model")) {
+                    chat_request["model"] = input_json["model"];
+                }
+                if (input_json.contains("temperature")) {
+                    chat_request["temperature"] = input_json["temperature"];
+                } else {
+                    chat_request["temperature"] = 0.7;
+                }
+                if (input_json.contains("max_tokens")) {
+                    chat_request["max_tokens"] = input_json["max_tokens"];
+                }
+
+                cout << "Sending request to ChatGPT API with " << chat_request["messages"].size() << " messages" << endl;
+
+                // Make the request to ChatGPT API
+                openai::Json chat_response = openai::chat().create(chat_request);
+
+                // Extract the response text from ChatGPT
+                std::string chatgpt_response = chat_response["choices"][0]["message"]["content"];
+                cout << "ChatGPT response: " << chatgpt_response << endl;
+
+                // Create a JSON response with both text and audio
+                openai::Json response_json;
+                response_json["text"] = chatgpt_response;
+
+                // Now process the ChatGPT response with TTS to get audio
+                ClientConnection *cliente = new ClientConnection (op);
+
+                int aux;
+                cout << "IP socket: " << ip_socket << endl;
+                cout << "Port socket: " << puerto_socket << endl;
+                aux=cliente->OpenInetConnection(ip_socket,puerto_socket);
+                if(aux==-1) {
+                    fprintf(stderr,"Unable to establish server connection\n");
+                    // Don't exit, just return the text response without audio
+                    res.set_header("Content-Type", "application/json");
+                    res.set_content(response_json.dump(), "application/json");
+                    return true;
+                }
+
+                cliente->SendOptions();
+                fprintf(stderr,"Sending ChatGPT response to synthesize\n");
+                cout << "ChatGPT response length: " << chatgpt_response.length() << endl;
+                cliente->SendText(chatgpt_response.c_str(), chatgpt_response.length(), cliente->ObtainSSocket());
+
+                fprintf(stderr,"Receiving synthesized file\n");
+
+                int out_size = 1024 * 10;
+                char **outputAudio = (char**) malloc(sizeof (char**));
+                *outputAudio = (char*)malloc(out_size * sizeof(char*));
+                cout << "First malloc" << endl;
+                cliente->ReceiveAudio(outputAudio, &out_size, cliente->ObtainSSocket());
+                cout << "This is the output size of the new audio: " << out_size << endl;
+
+                cliente->CloseConnection();
+                delete (cliente);
+
+                // Encode audio data to base64
+                std::string base64_audio = base64_encode((const unsigned char*)*outputAudio, out_size);
+
+                // Add audio to JSON response
+                response_json["audio"] = base64_audio;
+                response_json["audio_format"] = "wav";
+
+                // Return the JSON response
+                res.set_header("Content-Type", "application/json");
+                res.set_content(response_json.dump(), "application/json");
+
+                // Free the audio memory
+                free(*outputAudio);
+                free(outputAudio);
+
+                return true;
+            } catch (const std::exception& e) {
+                // If OpenAI API fails, fall back to the original TTS processing
+                cout << "OpenAI API error: " << e.what() << ". Falling back to TTS." << endl;
+            }
+            return true;
+        });
     });
 
+    cout << "Bye" << endl;
     svr.listen(ip, puerto);
     cout << "Bye" << endl;
     cin.get();
