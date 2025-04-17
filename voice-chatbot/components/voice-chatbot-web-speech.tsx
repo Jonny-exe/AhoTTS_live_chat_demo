@@ -2,11 +2,23 @@
 
 import { useState, useEffect, useRef } from "react"
 
+// Define message type for better type safety
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
 export default function VoiceChatbot() {
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [dotSize, setDotSize] = useState(80)
   const [volume, setVolume] = useState(0)
+  const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([
+    {
+      role: "system",
+      content: "You are a helpful voice assistant. Keep responses concise and conversational.",
+    }
+  ])
 
   // Refs for audio processing
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -269,10 +281,7 @@ export default function VoiceChatbot() {
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [
-            {
-              role: "system",
-              content: "You are a helpful voice assistant. Keep responses concise and conversational.",
-            },
+            ...conversationHistory,
             {
               role: "user",
               content: transcribedJson.data[0]
@@ -288,10 +297,17 @@ export default function VoiceChatbot() {
       const responseData = await chatResponse.json()
       const aiText = responseData.choices[0]?.message?.content
 
-      console.log(aiText )
+      console.log(aiText)
+
+      // Update conversation history with the new messages
+      setConversationHistory(prevHistory => [
+        ...prevHistory,
+        { role: "user", content: transcribedJson.data[0] },
+        { role: "assistant", content: aiText }
+      ])
 
 
-      const responseAudio = await fetch("http://localhost:8000/content_receiver", {
+      const responseAudio = await fetch("http://localhost:9000/content_receiver", {
         method: "POST",
         body: aiText,
         headers: {

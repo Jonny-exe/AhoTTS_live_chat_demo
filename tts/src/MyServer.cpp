@@ -72,16 +72,14 @@ Version  dd/mm/aa  Autor     Proposito de la edicion
 
 
 using namespace std;
-// #define CPPHTTPLIB_OPENSSL_SUPPORT
-// #include "path/to/httplib.h"
 
 // HTTP
 int main(int argc, char *argv[]) {
-    KVStrList pro("InputFile=input.txt Lang=eu OutputFile=output.wav Speed=100 IP=NULL Port=0 SetDur=n");
+    KVStrList pro("InputFile=input.txt Lang=eu OutputFile=output.wav Speed=100 SocketIP=NULL IP=NULL Port=0 SocketPort=0 SetDur=n");
     StrList files;
 
     clargs2props(argc, argv, pro, files,
-            "InputFile=s Lang={es|eu} OutputFile=s Speed=s IP=s Port=i SetDur=b");
+            "InputFile=s Lang={es|eu} OutputFile=s Speed=s SocketIP=s IP=s Port=i SocketPort=i SetDur=b");
     
     httplib::Server svr;
     
@@ -89,17 +87,31 @@ int main(int argc, char *argv[]) {
     const char *inputfile = pro.val("InputFile");
     const char *outputfile = pro.val("OutputFile");
     const char *speed = pro.val("Speed");
-    //const char *gender = pro.val("Gender");
     const char *ip=pro.val("IP");
+    const char *ip_socket=pro.val("SocketIP");
     const int puerto=pro.ival("Port");
+    const int puerto_socket=pro.ival("SocketPort");
+    cout << "Puerto: " << puerto << endl;
+    cout << "Puerto socket: " << puerto_socket << endl;
     bool setdur=pro.bbval("SetDur");
 
     if (!strcmp(ip,"NULL")){
         fprintf(stderr,"IP direction is mandatory\n");
         exit (-1);
     }
+
+    if (!strcmp(ip_socket,"NULL")){
+        fprintf(stderr,"Socket IP direction is mandatory\n");
+        exit (-1);
+    }
+
     if(puerto<1024 || puerto>65535){
         fprintf(stderr,"The port must be between 1024 and 65535 (WellKnown ports are forbidden)\n");
+        exit (-1);
+    }
+
+    if(puerto_socket<1024 || puerto_socket>65535){
+        fprintf(stderr,"The socket port must be between 1024 and 65535 (WellKnown ports are forbidden)\n");
         exit (-1);
     }
 
@@ -109,21 +121,12 @@ int main(int argc, char *argv[]) {
     op.setdur=setdur;
 
 
-    // HTTPS
-    // httplib::SSLServer svr;
-
     cout << "Hello" << endl;
     svr.Get("/hi", [](const httplib::Request &, httplib::Response &res) {
         cout << "Test: this the HI endpon" << endl;
         res.set_content("Hello World!", "text/plain");
     });
 
-    // svr.Options("/content_receiver", [](const auto& req, auto& res) {
-    //     res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin").c_str());
-    //     res.set_header("Allow", "GET, POST, HEAD, OPTIONS");
-    //     res.set_header("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Accept, Origin, Authorization");
-    //     res.set_header("Access-Control-Allow-Methods", "OPTIONS, GET, POST, HEAD");
-    // });
     svr.Options(R"(\*)", [](const auto& req, auto& res) {
         res.set_header("Allow", "GET, POST, HEAD, OPTIONS");
     });
@@ -145,6 +148,7 @@ int main(int argc, char *argv[]) {
     svr.Post("/content_receiver",
   [&](const httplib::Request &req, httplib::Response &res, const httplib::ContentReader &content_reader) {
 
+        cout << "Test: inside reciver" << endl;
         res.set_header("Access-Control-Allow-Origin", "*"); // Allow all origins
         res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE"); // Allow methods
         res.set_header("Access-Control-Allow-Headers", "Content-Type"); // Allow headers
@@ -155,36 +159,25 @@ int main(int argc, char *argv[]) {
         body.append(data, data_length);
         cout << "Text: " << data << endl;
 
-        // strcpy(op.gender,gender);
-        
         ClientConnection *cliente = new ClientConnection (op);
         
-        //if(!strcmp(argv[2],"cat")||!strcmp(argv[2],"gl")||!strcmp(argv[2],"es")||!strcmp(argv[2],"eu")){
-        //	strcpy(lang,argv[2]);}
-        //else{
-        //	printf("Error, lengua no soportada\n");
-        //	usage();return -1;}
         int aux;
-        aux=cliente->OpenInetConnection(ip,puerto);
+        cout << "IP socket: " << ip_socket << endl;
+        cout << "Port socket: " << puerto_socket << endl;
+        aux=cliente->OpenInetConnection(ip_socket,puerto_socket);
         if(aux==-1)
         {
             fprintf(stderr,"Unable to establish server connection\n");
             exit(-1);
         }
 
-        //printf("El archivo a sintetizar es: %s, por el descriptor: %d\n",inputfile,cliente->ObtainSSocket());
-        //cliente->SendLanguage(lang);
         cliente->SendOptions();
         fprintf(stderr,"Sending file to synthesize\n");
-        // cliente->SendFile(inputfile,cliente->ObtainSSocket());
         cout << "Data: "<< data << endl;
         cout << "Length: "<< data_length << endl;
         cliente->SendText(data, data_length, cliente->ObtainSSocket());
         
         
-        //FILE* fd;
-        //fd=fopen("out.wav","wb");
-        //if(fd!=NULL){
         fprintf(stderr,"Receiving synthesized file\n");
 
         int out_size = 1024 * 10;
@@ -193,8 +186,6 @@ int main(int argc, char *argv[]) {
         cout << "First malloc" << endl;
         cliente->ReceiveAudio(outputAudio, &out_size, cliente->ObtainSSocket());
         cout << "This is the output size of the new audio: " << out_size << endl;
-        //	}
-        //fclose(fd);
         
         cliente->CloseConnection();
         delete (cliente);
@@ -209,104 +200,7 @@ int main(int argc, char *argv[]) {
       });
     });
 
+    svr.listen(ip, puerto);
     cout << "Bye" << endl;
-    svr.listen("localhost", 8000);
     cin.get();
 }
-
-
-//#define SERVER "localhost"
-//#define SERVICE "ahotts"
-/*
-void usage (void);
-*/
-// int main (int argc, char* argv[])
-// {
-	
-// 	KVStrList pro("InputFile=input.txt Lang=eu OutputFile=output.wav Speed=100 IP=NULL Port=0 SetDur=n");
-// 	StrList files;
-
-// 	clargs2props(argc, argv, pro, files,
-// 			"InputFile=s Lang={es|eu} OutputFile=s Speed=s IP=s Port=i SetDur=b");
-	
-	
-// 	const char *lang = pro.val("Lang");
-// 	const char *inputfile = pro.val("InputFile");
-// 	const char *outputfile = pro.val("OutputFile");
-// 	const char *speed = pro.val("Speed");
-// 	//const char *gender = pro.val("Gender");
-// 	const char *ip=pro.val("IP");
-// 	const int puerto=pro.ival("Port");
-// 	bool setdur=pro.bbval("SetDur");
-
-// 	if (!strcmp(ip,"NULL")){
-// 		fprintf(stderr,"IP direction is mandatory\n");
-// 		exit (-1);
-// 	}
-// 	if(puerto<1024 || puerto>65535){
-// 		fprintf(stderr,"The port must be between 1024 and 65535 (WellKnown ports are forbidden)\n");
-// 		exit (-1);
-// 	}
-	
-// 	//Sin argumentos se devuelve como usarlo
-	
-// 	//Objeto cliente
-// 	Options op;
-// 	strcpy(op.language,lang);
-// 	strcpy(op.speed,speed);
-// 	op.setdur=setdur;
-// 	//strcpy(op.gender,gender);
-	
-// 	ClientConnection *cliente = new ClientConnection (op);
-	
-// 	//if(!strcmp(argv[2],"cat")||!strcmp(argv[2],"gl")||!strcmp(argv[2],"es")||!strcmp(argv[2],"eu")){
-// 	//	strcpy(lang,argv[2]);}
-// 	//else{
-// 	//	printf("Error, lengua no soportada\n");
-// 	//	usage();return -1;}
-// 	int aux;
-// 	aux=cliente->OpenInetConnection(ip,puerto);
-// 	if(aux==-1)
-// 	{
-// 		fprintf(stderr,"Unable to establish server connection\n");
-// 		exit(-1);
-// 	}
-
-// 	FILE *fp=NULL;
-// 	fp=fopen(inputfile,"r");
-// 	if(fp!=NULL){
-// 		fclose(fp);
-// 	}else{
-// 		fprintf(stderr,"Please check that the %s file exists\n", inputfile);
-// 		exit(-1);
-// 	}
-
-
-// 	//printf("El archivo a sintetizar es: %s, por el descriptor: %d\n",inputfile,cliente->ObtainSSocket());
-// 	//cliente->SendLanguage(lang);
-// 	cliente->SendOptions();
-// 	fprintf(stderr,"Sending file to synthesize\n");
-// 	cliente->SendFile(inputfile,cliente->ObtainSSocket());
-	
-	
-// 	//FILE* fd;
-// 	//fd=fopen("out.wav","wb");
-// 	//if(fd!=NULL){
-// 	fprintf(stderr,"Receiving synthesized file\n");
-// 	cliente->ReceiveFile(outputfile,cliente->ObtainSSocket());
-// 	//	}
-// 	//fclose(fd);
-	
-// 	cliente->CloseConnection();
-// 	delete (cliente);
-// 	return 0;
-// }
-// /*
-// void usage (void)
-// {
-// 	printf("Uso: ./Cliente \"Archivo a sintetizar\" \"lengua\"\n");
-// 	printf("Texto a enviar: máximo de 9999 caracteres\n");
-// 	printf("Lengua: gl, cat, es, eu\n");
-// }
-// */
-

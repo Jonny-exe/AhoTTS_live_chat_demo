@@ -1,2 +1,6 @@
 *.env*
 voice-chatbot/.env
+voice-chatbot/build
+voice-chatbot/out
+voice-chatbot/node_modules
+logs

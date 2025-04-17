@@ -1,0 +1,5 @@
+FROM ubuntu:latest
+WORKDIR /app
+COPY ./bin/my_server /app/my_server
+EXPOSE 9000
+ENTRYPOINT ["./my_server", "-IP=0.0.0.0", "-SocketIP=172.100.0.3", "-Port=9000", "-SocketPort=9002"]
