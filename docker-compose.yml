@@ -2,6 +2,7 @@
 
 services:
   cpp_service:
+    image: jonnyexe/ahotts_cpp_service
     build:
       context: .
       dockerfile: Dockerfile.my_server
@@ -16,6 +17,7 @@ services:
     restart: always
 
   internal_socket:
+    image: jonnyexe/internal_socket
     build:
       context: .
       dockerfile: Dockerfile.tts_server
@@ -27,6 +29,7 @@ services:
     restart: always
 
   nextjs_static:
+    image: jonnyexe/nextjs_static
     build:
       context: .
       dockerfile: Dockerfile.nextjs  # Ensure it points to the correct Dockerfile
