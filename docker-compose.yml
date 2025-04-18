@@ -34,7 +34,7 @@ services:
       context: .
       dockerfile: Dockerfile.nextjs  # Ensure it points to the correct Dockerfile
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      #- ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./logs/nginx:/var/log/nginx  # Mounts logs to the host machine
     environment:
       - NEXT_PUBLIC_SYSTEM_PROMPT

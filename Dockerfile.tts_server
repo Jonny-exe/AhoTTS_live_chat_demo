@@ -2,5 +2,6 @@ FROM ubuntu:latest
 WORKDIR /app
 COPY ./bin/tts_server /app/tts_server
 COPY ./bin/data_tts /app/data_tts
+COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 9002
 ENTRYPOINT ["./tts_server", "-IP=0.0.0.0", "-Port=9002"]
